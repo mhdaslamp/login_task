@@ -1,0 +1,22 @@
+name: lichess_flutter_app
+description: A Flutter app that connects to Lichess.org and plays chess with random users.
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.2.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.6
+  web_socket_channel: ^2.4.0
+  flutter_appauth: ^6.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
