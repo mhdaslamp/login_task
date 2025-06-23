@@ -111,64 +111,52 @@ class _LichessLoginPageState extends State<LichessLoginPage> {
     }
   }
 
-  void listenToEventStream(String token) async {
-    // Close any existing connection
-    await eventChannel?.sink.close();
-    await eventSubscription?.cancel();
+  void listenToEventStream(String token) {
+    print('🔄 Using HTTP stream for event listening (WebSocket skipped)');
 
-    try {
-      final channel = IOWebSocketChannel.connect(
-        Uri.parse('wss://lichess.org/api/stream/event'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'User-Agent': 'LichessApp/1.0',
-          'Accept': 'application/vnd.lichess.v3+json',
-        },
-      );
+    final client = http.Client();
+    final request = http.Request('GET', Uri.parse('https://lichess.org/api/stream/event'));
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['Accept'] = 'application/x-ndjson'; // important
 
-      setState(() {
-        eventChannel = channel;
-      });
+    client.send(request).then((response) {
+      response.stream
+          .transform(utf8.decoder)
+          .transform(const LineSplitter()) // each line is a separate event
+          .listen((line) {
+        print('📩 Event: $line');
+        try {
+          final data = jsonDecode(line);
+          if (data['type'] == 'gameStart') {
+            final gameId = data['game']['id'];
+            final opponent = data['game']['opponent']['username'];
+            print('🎮 Game started with $opponent (ID: $gameId)');
 
-      print('✅ WebSocket connection established');
-
-      eventSubscription = channel.stream.listen(
-            (message) {
-          print('📩 Event: $message');
-          try {
-            final data = jsonDecode(message);
-            if (data['type'] == 'gameStart') {
-              final gameId = data['game']['id'];
-              final opponent = data['game']['opponent']['username'];
-              print('🎮 Game started with $opponent (ID: $gameId)');
-
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChessGameScreen(
-                    gameId: gameId,
-                    token: token,
-                    opponent: opponent,
-                  ),
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChessGameScreen(
+                  gameId: gameId,
+                  token: token,
+                  opponent: opponent,
                 ),
-              );
-            }
-          } catch (e) {
-            print('❌ Error parsing event: $e');
+              ),
+            );
           }
-        },
-        onError: (error) {
-          print('❌ WebSocket error: $error');
-        },
-        onDone: () {
-          print('ℹ️ WebSocket connection closed');
-        },
-      );
-    } catch (e) {
-      print('❌ WebSocket connection failed: $e');
-      fallbackToHttpStream(token);
-    }
+        } catch (e) {
+          print('❌ Failed to parse event: $e');
+        }
+      }, onError: (e) {
+        print('❌ HTTP event stream error: $e');
+      }, onDone: () {
+        print('ℹ️ HTTP event stream closed');
+      });
+    }).catchError((e) {
+      print('❌ Failed to connect to HTTP stream: $e');
+    });
   }
+
+
   void fallbackToHttpStream(String token) async {
     print('🔄 Attempting HTTP event stream fallback');
 
